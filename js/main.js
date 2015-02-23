@@ -125,7 +125,8 @@ function updateOptions() {
     }
   } else {
     sort_function = function(a, b) {
-      return a.Route.ShortName > b.Route.ShortName;
+        // sort by comparing the latest time that will come
+      return a[0].Route.ShortName > b[0].Route.ShortName;
     }
   }
 
@@ -290,7 +291,11 @@ function removeTables(){
 // the most common example being opportunity trips (e.g. Garage via Mass Ave
 // at the end of 30-3 EVE, which is on route 30 and northbound, just like North Amherst,
 // but has a different trip description).
-function renderRow(info, section) {
+function renderRow(departures, section) {
+    // this is the very next stop
+    var info = departures[0];
+    
+    console.log(departures);
   var short_proportions = "col-xs-24 col-sm-2 col-md-2 col-lg-1";
   var long_proportions = "col-xs-24 col-sm-15 col-md-15 col-lg-16";
   var arrival_proportions = "col-xs-24 col-sm-7 col-md-7 col-lg-7";
@@ -311,17 +316,23 @@ function renderRow(info, section) {
       offset = -1;
     }
   }
+    var futureTimes = "";
+    
+    // prepare the future times
+    for (var i=1; i<departures.length; i++)
+        futureTimes += " " + moment(departures[i].Departure.EDT).format('h:mm');
+    
   section.append(
       '<div class="route animated ' + options.start_animation + '" style="background-color: #' + info.Route.Color + '">' +
       '<div class="row">' + 
-      '<div class="route_short_name ' + short_proportions + ' text-center-xs" style="color: #' + info.Route.TextColor + '">' +
+      '<div class="route_short_name ' + short_proportions + ' text-center-xs" style="color: #' + info.Route.TextColor + '">' + "Bus " +
       info.Route.ShortName + " " + 
       '</div>' + 
       '<div class="route_long_name ' + long_proportions + ' text-center-xs" style="color: #' + info.Route.TextColor + '">' +
-      info.Departure.Trip.InternetServiceDesc + 
+      info.Departure.Trip.InternetServiceDesc + '<br \>' + '<u>' + moment(info.Departure.EDT).format('h:mm') + '</u>' + futureTimes +
       '</div>' + 
-      '<div class="route_arrival ' + arrival_proportions + ' text-center-xs" style="color: #' + info.Route.TextColor + '">' +
-        moment(info.Departure.EDT).from(moment().add(offset, 'hours'), true) +
+      '<div class="route_arrival ' + arrival_proportions + ' text-center-xs" style="color: #' + info.Route.TextColor + '">' + moment(info.Departure.EDT).from(moment().add(offset, 'hours'), true) + ' from now'
+         + 
       '</div>'+ 
       '</div>'+ 
       '</div>'
@@ -342,18 +353,30 @@ function getDepartureInfo(directions) {
     var route = routes[direction.RouteId];
     for (var j = 0; j < direction.Departures.length; j++) {
       var departure = direction.Departures[j];
-      //If the departure has a unique InternetServiceDesc,
-      if ($.inArray(departure.Trip.InternetServiceDesc, unique_ISDs) == -1
-          //and if it's in the allowed routes,
-          && (options.routes.length == 0 || $.inArray(route.ShortName, options.routes) != -1)
+        //if it's in the allowed routes,
+         if ((options.routes.length == 0 || $.inArray(route.ShortName, options.routes) != -1)
           //and if it's not in the excluded trips
           && (options.excluded_trips.length == 0 || $.inArray(departure.Trip.InternetServiceDesc, options.excluded_trips) == -1)
           //and if it's in the future,
-          && moment(departure.EDT).isAfter(Date.now())) {
-        // then we push it to the list, and push its ISD to the unique ISDs list.
-        unique_ISDs.push(departure.Trip.InternetServiceDesc);
-        departures.push({Departure: departure, Route: route});
-      }
+          && moment(departure.EDT).isAfter(Date.now()))
+         {
+          //If the departure has a unique InternetServiceDesc,
+          if ($.inArray(departure.Trip.InternetServiceDesc, unique_ISDs) == -1) 
+          {
+            // then we push it to the list, and push its ISD to the unique ISDs list.
+            unique_ISDs.push(departure.Trip.InternetServiceDesc);
+            departures.push([{Departure: departure, Route: route}]);
+          }
+            // if we already added this stop (it's not unique) add it to the appropriate list 
+            else 
+            {
+                // get the index of this stop relative to what we've stored
+                var ind = unique_ISDs.indexOf(departure.Trip.InternetServiceDesc);
+                
+                // append it
+                departures[ind].push({Departure: departure, Route: route});
+            }
+         }
     }
   }
   return departures.sort(sort_function);
